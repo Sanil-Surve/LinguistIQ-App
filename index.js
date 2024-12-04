@@ -41,7 +41,7 @@ app.post('/api/generateLesson', async (req, res) => {
     const lesson = await generateChatCompletion(
       userInput,
       "gpt-3.5-turbo",
-      "Generate a language lesson based on this input"
+      "Generate a lesson based on this input"
     );
     res.json({ lesson });
   } catch (error) {
