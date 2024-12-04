@@ -60,7 +60,7 @@ app.post('/api/generateQuizzes', async (req, res) => {
     const quizzes = await generateChatCompletion(
       lessonContent,
       "gpt-3.5-turbo",
-      "Based on the following lesson, generate 5 quiz questions with answers"
+      "Based on the following lesson, generate 5 quiz multiple choice questions with answers"
     );
     res.json({ quizzes });
   } catch (error) {
