@@ -11,7 +11,7 @@ app.use(express.json());
 // Ollama API configuration
 const OLLAMA_BASE_URL =
   // process.env.OLLAMA_BASE_URL || "http://31.97.202.251:11434";
-  process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+  process.env.OLLAMA_BASE_URL || "http://31.97.202.251:11434";
 const DEFAULT_MODEL = process.env.OLLAMA_MODEL || "llama3.2:latest";
 
 // Helper function to interact with Ollama API with streaming
