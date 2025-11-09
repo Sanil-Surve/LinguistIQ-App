@@ -6,14 +6,14 @@ require("dotenv").config();
 // Initialize Express app
 const app = express();
 app.use(
-  cors(
-    cors.Options({
-      origin: "*",
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
-    })
-  )
+  cors({
+    origin: ["https://linguist-iq.vercel.app"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
 );
+app.options("*", cors());
 app.use(express.json());
 
 // Initialize Groq client
@@ -103,15 +103,15 @@ app.post("/api/generateLesson", async (req, res) => {
 
 // Route to generate quiz questions with streaming
 app.post("/api/generateQuizzes", async (req, res) => {
-  const { userInput, model } = req.body;
+  const { lessonContent, model } = req.body;
 
-  if (!userInput) {
-    return res.status(400).json({ error: "User input is required" });
+  if (!lessonContent) {
+    return res.status(400).json({ error: "Lesson Content is required" });
   }
 
   try {
     await generateChatCompletion(
-      userInput,
+      lessonContent,
       model || DEFAULT_MODEL,
       "Based on the following input, generate exactly 5 multiple choice quiz questions. For each question:\n1. Provide 4 options (A, B, C, D)\n2. Clearly indicate the correct answer\n3. Format as follows:\n\nQuestion 1: [question text]\nA) [option A]\nB) [option B]\nC) [option C]\nD) [option D]\nCorrect Answer: [letter]",
       res
