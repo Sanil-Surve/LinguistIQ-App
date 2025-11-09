@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const axios = require("axios");
+const Groq = require("groq-sdk");
 require("dotenv").config();
 
 // Initialize Express app
@@ -8,13 +8,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Ollama API configuration
-const OLLAMA_BASE_URL =
-  // process.env.OLLAMA_BASE_URL || "http://31.97.202.251:11434";
-  process.env.OLLAMA_BASE_URL || "http://31.97.202.251:11434";
-const DEFAULT_MODEL = process.env.OLLAMA_MODEL || "llama3.2:latest";
+// Initialize Groq client
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
-// Helper function to interact with Ollama API with streaming
+// Groq model constants
+const DEFAULT_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+
+// Helper function to interact with Groq API with streaming
 const generateChatCompletion = async (
   userPrompt,
   model,
@@ -22,73 +24,44 @@ const generateChatCompletion = async (
   res
 ) => {
   try {
-    const response = await axios.post(
-      `${OLLAMA_BASE_URL}/api/generate`,
-      {
-        model: model || DEFAULT_MODEL,
-        prompt: `${messagePrefix}: ${userPrompt}`,
-        stream: true, // Enable streaming
-        options: {
-          temperature: 0.7,
-          top_p: 0.9,
-          max_tokens: 2048,
-        },
-      },
-      {
-        responseType: "stream", // Important for streaming
-        timeout: 1200000,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
+        { role: "system", content: messagePrefix },
+        { role: "user", content: userPrompt },
+      ],
+      model: model || DEFAULT_MODEL,
+      temperature: 0.7,
+      top_p: 0.9,
+      max_tokens: 2048,
+      stream: true,
+    });
 
     // Set headers for SSE (Server-Sent Events)
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no"); // Disable buffering for Nginx
 
     // Flush the headers to establish the SSE connection
     res.flushHeaders();
 
-    response.data.on("data", (chunk) => {
-      const lines = chunk
-        .toString()
-        .split("\n")
-        .filter((line) => line.trim() !== "");
-      for (const line of lines) {
-        try {
-          const parsed = JSON.parse(line);
-          if (parsed.response) {
-            // Send each chunk as an SSE event
-            res.write(
-              `data: ${JSON.stringify({ content: parsed.response })}\n\n`
-            );
-            // Flush the response to send it immediately
-            if (res.flush) {
-              res.flush();
-            }
-          }
-        } catch (err) {
-          console.error("Error parsing chunk:", err);
+    for await (const part of chatCompletion) {
+      if (part.choices[0].delta?.content) {
+        res.write(
+          `data: ${JSON.stringify({
+            content: part.choices[0].delta.content,
+          })}\n\n`
+        );
+        if (res.flush) {
+          res.flush();
         }
       }
-    });
+    }
 
-    response.data.on("end", () => {
-      // Send completion event
-      res.write('event: end\ndata: {"message": "Stream completed"}\n\n');
-      res.end();
-    });
-
-    response.data.on("error", (err) => {
-      console.error("Stream error:", err);
-      res.write('event: error\ndata: {"error": "Stream error occurred"}\n\n');
-      res.end();
-    });
+    // Send completion event
+    res.write('event: end\ndata: {"message": "Stream completed"}\n\n');
+    res.end();
   } catch (error) {
-    console.error("Error with Ollama API:", error.message);
+    console.error("Error with Groq API:", error.message);
     if (!res.headersSent) {
       res.status(500).json({ error: error.message });
     } else {
@@ -97,22 +70,6 @@ const generateChatCompletion = async (
     }
   }
 };
-
-// Route to check if Ollama is running and what models are available
-app.get("/api/models", async (req, res) => {
-  try {
-    const response = await axios.get(`${OLLAMA_BASE_URL}/api/tags`);
-    res.json({
-      status: "Ollama is running",
-      models: response.data.models,
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: "Ollama is not running or not accessible",
-      message: "Make sure Ollama is installed and running on localhost:11434",
-    });
-  }
-});
 
 // Route to generate lesson content with streaming
 app.post("/api/generateLesson", async (req, res) => {
@@ -167,20 +124,9 @@ app.post("/api/pullModel", async (req, res) => {
   }
 
   try {
-    // This will start the model download - it's a streaming endpoint
-    const response = await axios.post(
-      `${OLLAMA_BASE_URL}/api/pull`,
-      {
-        name: model,
-      },
-      {
-        timeout: 300000, // 5 minute timeout for model downloads
-      }
-    );
-
-    res.json({
-      message: `Model ${model} pull initiated`,
-      status: "success",
+    // Groq does not support pulling models, so respond accordingly
+    res.status(400).json({
+      error: "Model pulling is not supported by Groq API",
     });
   } catch (error) {
     res.status(500).json({
@@ -193,17 +139,21 @@ app.post("/api/pullModel", async (req, res) => {
 // Health check route
 app.get("/health", async (req, res) => {
   try {
-    const response = await axios.get(`${OLLAMA_BASE_URL}/api/tags`);
+    // Perform a small test query to check Groq connectivity
+    const testCompletion = await groq.chat.completions.create({
+      messages: [{ role: "system", content: "Say hello" }],
+      model: DEFAULT_MODEL,
+      max_tokens: 5,
+    });
+
     res.json({
-      status: "Server and Ollama are running",
-      ollama_url: OLLAMA_BASE_URL,
-      default_model: DEFAULT_MODEL,
-      available_models: response.data.models?.length || 0,
+      status: "Server and Groq API are running",
+      groq_model: DEFAULT_MODEL,
+      test_response: testCompletion.choices[0].message.content,
     });
   } catch (error) {
     res.status(500).json({
-      status: "Server running but Ollama not accessible",
-      ollama_url: OLLAMA_BASE_URL,
+      status: "Server running but Groq API not accessible",
       error: error.message,
     });
   }
@@ -224,10 +174,8 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 8081;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Using Ollama at: ${OLLAMA_BASE_URL}`);
-  console.log(`Default model: ${DEFAULT_MODEL}`);
-  console.log("\nMake sure Ollama is running with: ollama serve");
-  console.log("To verify llama3.2:latest is available: ollama list");
+  console.log(`Using Groq API with model: ${DEFAULT_MODEL}`);
+  console.log("\nMake sure your GROQ_API_KEY is set correctly.");
 });
 
 process.on("unhandledRejection", (reason, promise) => {
