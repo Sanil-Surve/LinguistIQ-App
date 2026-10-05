@@ -7,7 +7,9 @@ const Groq = require("groq-sdk");
 
 // Validate essential environment configuration on startup
 if (!process.env.GROQ_API_KEY) {
-  console.error("FATAL ERROR: GROQ_API_KEY environment variable is not defined.");
+  console.error(
+    "FATAL ERROR: GROQ_API_KEY environment variable is not defined.",
+  );
   process.exit(1);
 }
 
@@ -15,7 +17,7 @@ if (!process.env.GROQ_API_KEY) {
 const PORT = process.env.PORT || 8081;
 const IS_PROD = process.env.NODE_ENV === "production";
 const DEFAULT_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
-const MAX_INPUT_CHARS = 4000;
+const MAX_INPUT_CHARS = 6000;
 
 // Supported Groq models allowlist
 const ALLOWED_MODELS = new Set([
@@ -33,7 +35,10 @@ const ALLOWED_MODELS = new Set([
  * Validates and falls back to DEFAULT_MODEL if requested model is unsupported.
  */
 function getValidatedModel(requestedModel) {
-  if (typeof requestedModel === "string" && ALLOWED_MODELS.has(requestedModel.trim())) {
+  if (
+    typeof requestedModel === "string" &&
+    ALLOWED_MODELS.has(requestedModel.trim())
+  ) {
     return requestedModel.trim();
   }
   return DEFAULT_MODEL;
@@ -44,7 +49,10 @@ function getValidatedModel(requestedModel) {
  */
 function validateTextInput(input, fieldName) {
   if (typeof input !== "string" || !input.trim()) {
-    return { valid: false, error: `${fieldName} is required and must be a non-empty string.` };
+    return {
+      valid: false,
+      error: `${fieldName} is required and must be a non-empty string.`,
+    };
   }
   if (input.trim().length > MAX_INPUT_CHARS) {
     return {
@@ -70,7 +78,7 @@ app.disable("x-powered-by");
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
-  })
+  }),
 );
 
 // Security: Configure CORS with explicit origin allowlist
@@ -82,13 +90,19 @@ const defaultAllowedOrigins = [
 ];
 
 const configuredOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()).filter(Boolean)
+  ? process.env.ALLOWED_ORIGINS.split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
   : defaultAllowedOrigins;
 
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow non-browser requests or allowed browser origins
-    if (!origin || configuredOrigins.includes(origin) || (!IS_PROD && origin.startsWith("http://localhost:"))) {
+    if (
+      !origin ||
+      configuredOrigins.includes(origin) ||
+      (!IS_PROD && origin.startsWith("http://localhost:"))
+    ) {
       return callback(null, true);
     }
     return callback(new Error(`Origin ${origin} is not allowed by CORS`));
@@ -126,7 +140,7 @@ const generateChatCompletion = async (
   res,
   userPrompt,
   model,
-  messagePrefix
+  messagePrefix,
 ) => {
   const abortController = new AbortController();
 
@@ -152,7 +166,7 @@ const generateChatCompletion = async (
         max_tokens: 2048,
         stream: true,
       },
-      { signal: abortController.signal }
+      { signal: abortController.signal },
     );
 
     // Set headers for SSE (Server-Sent Events)
@@ -173,7 +187,7 @@ const generateChatCompletion = async (
         res.write(
           `data: ${JSON.stringify({
             content: deltaContent,
-          })}\n\n`
+          })}\n\n`,
         );
         if (typeof res.flush === "function") {
           res.flush();
@@ -218,7 +232,7 @@ app.post("/api/generateLesson", async (req, res) => {
     res,
     validation.sanitized,
     model,
-    "Generate comprehensive educational information and lesson content based on this input. Provide detailed explanations, examples, structured learning material, comparison tables, visual ASCII diagrams/flowcharts, and blockquote tips. Format the response strictly using rich GitHub Flavored Markdown."
+    "Generate comprehensive educational information and lesson content based on this input. Provide detailed explanations, examples, structured learning material, comparison tables, visual ASCII diagrams/flowcharts, and blockquote tips. Format the response strictly using rich GitHub Flavored Markdown.",
   );
 });
 
@@ -236,7 +250,7 @@ app.post("/api/generateQuizzes", async (req, res) => {
     res,
     validation.sanitized,
     model,
-    "Based on the following input, generate exactly 5 multiple choice quiz questions. For each question:\n1. Provide 4 options (A, B, C, D)\n2. Clearly indicate the correct answer\n3. Format as follows:\n\nQuestion 1: [question text]\nA) [option A]\nB) [option B]\nC) [option C]\nD) [option D]\nCorrect Answer: [letter]"
+    "Based on the following input, generate exactly 5 multiple choice quiz questions. For each question:\n1. Provide 4 options (A, B, C, D)\n2. Clearly indicate the correct answer\n3. Format as follows:\n\nQuestion 1: [question text]\nA) [option A]\nB) [option B]\nC) [option C]\nD) [option D]\nCorrect Answer: [letter]",
   );
 });
 
@@ -291,7 +305,9 @@ app.use((err, req, res, next) => {
 
 // Start the server
 const server = app.listen(PORT, () => {
-  console.log(`Server running in ${IS_PROD ? "production" : "development"} mode on port ${PORT}`);
+  console.log(
+    `Server running in ${IS_PROD ? "production" : "development"} mode on port ${PORT}`,
+  );
   console.log(`Default Groq model: ${DEFAULT_MODEL}`);
 });
 
