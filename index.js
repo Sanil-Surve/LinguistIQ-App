@@ -218,7 +218,7 @@ app.post("/api/generateLesson", async (req, res) => {
     res,
     validation.sanitized,
     model,
-    "Generate comprehensive educational information and lesson content based on this input. Provide detailed explanations, examples, and structured learning material. Format the response with markdown for bold (**bold**) and italic (*italic*) text."
+    "Generate comprehensive educational information and lesson content based on this input. Provide detailed explanations, examples, structured learning material, comparison tables, visual ASCII diagrams/flowcharts, and blockquote tips. Format the response strictly using rich GitHub Flavored Markdown."
   );
 });
 
