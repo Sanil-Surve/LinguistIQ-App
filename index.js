@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 8081;
 const IS_PROD = process.env.NODE_ENV === "production";
 const DEFAULT_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 const MAX_INPUT_CHARS = 6000;
+const MAX_LESSON_CHARS = 50000;
 
 // Supported Groq models allowlist
 const ALLOWED_MODELS = new Set([
@@ -47,20 +48,21 @@ function getValidatedModel(requestedModel) {
 /**
  * Helper to validate user input payload
  */
-function validateTextInput(input, fieldName) {
+function validateTextInput(input, fieldName, maxChars = MAX_INPUT_CHARS) {
   if (typeof input !== "string" || !input.trim()) {
     return {
       valid: false,
       error: `${fieldName} is required and must be a non-empty string.`,
     };
   }
-  if (input.trim().length > MAX_INPUT_CHARS) {
+  const trimmed = input.trim();
+  if (trimmed.length > maxChars) {
     return {
       valid: false,
-      error: `${fieldName} exceeds maximum permitted length of ${MAX_INPUT_CHARS} characters.`,
+      error: `${fieldName} exceeds maximum permitted length of ${maxChars} characters.`,
     };
   }
-  return { valid: true, sanitized: input.trim() };
+  return { valid: true, sanitized: trimmed };
 }
 
 // Initialize Groq client
@@ -116,8 +118,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-// Security: Limit request body payload size to prevent DoS
-app.use(express.json({ limit: "50kb" }));
+// Security: Limit request body payload size to prevent DoS (allow rich lesson markdown payloads)
+app.use(express.json({ limit: "500kb" }));
 
 // Security: Rate limiting to protect LLM endpoints against abuse and financial DoS
 const apiRateLimiter = rateLimit({
@@ -239,16 +241,26 @@ app.post("/api/generateLesson", async (req, res) => {
 // Route to generate quiz questions with streaming
 app.post("/api/generateQuizzes", async (req, res) => {
   const { lessonContent, model } = req.body;
-  const validation = validateTextInput(lessonContent, "lessonContent");
+  const validation = validateTextInput(
+    lessonContent,
+    "lessonContent",
+    MAX_LESSON_CHARS,
+  );
 
   if (!validation.valid) {
     return res.status(400).json({ error: validation.error });
   }
 
+  // Gracefully truncate to 30,000 characters if extraordinarily long, to stay comfortably within LLM context
+  const safeContent =
+    validation.sanitized.length > 30000
+      ? validation.sanitized.slice(0, 30000)
+      : validation.sanitized;
+
   await generateChatCompletion(
     req,
     res,
-    validation.sanitized,
+    safeContent,
     model,
     "Based on the following input, generate exactly 5 multiple choice quiz questions. For each question:\n1. Provide 4 options (A, B, C, D)\n2. Clearly indicate the correct answer\n3. Format as follows:\n\nQuestion 1: [question text]\nA) [option A]\nB) [option B]\nC) [option C]\nD) [option D]\nCorrect Answer: [letter]",
   );
